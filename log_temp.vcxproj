@@ -72,8 +72,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\Users\Navi\Documents\Reversing\Themida\ThemidaSDK\Include\C;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\Navi\Documents\Reversing\Themida\ThemidaSDK\Lib\COFF;C:\Users\Navi\Documents\Reversing\Themida\ThemidaSDK\Lib\OMF;$(LibraryPath)</LibraryPath>
+    <IncludePath>
+    </IncludePath>
+    <LibraryPath>
+    </LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>C:\Users\Navi\Documents\Reversing\Themida\ThemidaSDK\Include;$(IncludePath)</IncludePath>
