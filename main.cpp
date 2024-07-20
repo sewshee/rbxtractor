@@ -58,12 +58,12 @@ bool containsSignature(const std::vector<char>& data, const std::vector<std::str
 }
 
 bool isOggFile(const std::vector<char>& data) {
-    std::vector<std::string> signatures = { "OggS", "vorbis" };
+    static const std::vector<std::string> signatures = { "OggS", "vorbis" };
     return containsSignature(data, signatures);
 }
 
 bool isMp3File(const std::vector<char>& data) {
-    std::vector<std::string> signatures = { "ID3", "LAME", "matroska" };
+    static const std::vector<std::string> signatures = { "ID3", "LAME", "matroska" };
     return containsSignature(data, signatures);
 }
 
