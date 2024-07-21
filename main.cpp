@@ -17,9 +17,8 @@ wstring currentTime();
 void log(const wstring& message);
 wstring extractFileName(const wstring& filePath);
 bool containsSignature(const string& data, const vector<string>& signatures);
-bool isOggFile(const string& data);
-bool isMp3File(const string& data);
-bool copyFileToDir(const wstring& filePath, const string& audioType);
+wstring detectAudioType(const string& data);
+bool copyFileToDir(const wstring& filePath, const wstring& audioType);
 bool checkForAudioType(const wstring& filePath, const wstring& logFilePath, bool isExistingFile);
 void copyExistingFiles(const wstring& path, const wstring& logFilePath);
 void watchDir(const wstring& path, const wstring& logFilePath);
@@ -68,17 +67,20 @@ bool containsSignature(const string& data, const vector<string>& signatures) {
     return false;
 }
 
-bool isOggFile(const string& data) {
-    static const vector<string> signatures = { "OggS", "vorbis" };
-    return containsSignature(data, signatures);
+wstring detectAudioType(const string& data) {
+    static const vector<string> oggSignatures = { "OggS", "vorbis" };
+    static const vector<string> mp3Signatures = { "ID3", "LAME", "matroska" };
+
+    if (containsSignature(data, oggSignatures)) {
+        return L"ogg";
+    }
+    if (containsSignature(data, mp3Signatures)) {
+        return L"mp3";
+    }
+    return L"";
 }
 
-bool isMp3File(const string& data) {
-    static const vector<string> signatures = { "ID3", "LAME", "matroska" };
-    return containsSignature(data, signatures);
-}
-
-bool copyFileToDir(const wstring& filePath, const string& audioType) {
+bool copyFileToDir(const wstring& filePath, const wstring& audioType) {
     wstring savedAudiosDir = L"saved_audios";
 
     if (!fs::exists(savedAudiosDir)) {
@@ -91,7 +93,7 @@ bool copyFileToDir(const wstring& filePath, const string& audioType) {
     }
 
     wstring fileName = extractFileName(filePath);
-    wstring destinationPath = savedAudiosDir + L"\\" + fileName + L"." + wstring(audioType.begin(), audioType.end());
+    wstring destinationPath = savedAudiosDir + L"\\" + fileName + L"." + audioType;
 
     try {
         fs::copy(filePath, destinationPath, fs::copy_options::overwrite_existing);
@@ -132,24 +134,18 @@ bool checkForAudioType(const wstring& filePath, const wstring& logFilePath, bool
     }
     file.close();
 
-    bool copied = false;
-
-    if (isOggFile(data)) {
-        copied = copyFileToDir(filePath, "ogg");
-    } else if (isMp3File(data)) {
-        copied = copyFileToDir(filePath, "mp3");
-    }
-
-    if (copied) {
+    wstring audioType = detectAudioType(data);
+    if (!audioType.empty() && copyFileToDir(filePath, audioType)) {
         processedFiles.insert(filePath);
         wofstream logFile(logFilePath, ios::app);
         logFile << filePath << endl;
         logFile.close();
 
-        log(L"File copied to 'saved_audios' directory: " + extractFileName(filePath) + L"." + (isOggFile(data) ? L"ogg" : L"mp3"));
+        log(L"File copied to 'saved_audios' directory: " + extractFileName(filePath) + L"." + audioType);
+        return true;
     }
 
-    return copied;
+    return false;
 }
 
 void copyExistingFiles(const wstring& path, const wstring& logFilePath) {
