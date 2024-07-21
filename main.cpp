@@ -10,6 +10,20 @@
 #include <set>
 
 namespace fs = std::filesystem;
+using namespace std;
+
+// Function declarations
+void enableAnsi();
+wstring currentTime();
+void log(const wstring& message);
+wstring extractFileName(const wstring& filePath);
+bool containsSignature(const string& data, const vector<string>& signatures);
+bool isOggFile(const string& data);
+bool isMp3File(const string& data);
+bool copyFileToDir(const wstring& filePath, const string& audioType);
+bool checkForAudioType(const wstring& filePath, const wstring& logFilePath, bool isExistingFile);
+void copyExistingFiles(const wstring& path, const wstring& logFilePath);
+void watchDir(const wstring& path, const wstring& logFilePath);
 
 void enableAnsi() {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -22,121 +36,125 @@ void enableAnsi() {
     }
 }
 
-std::wstring currentTime() {
-    using namespace std::chrono;
+wstring currentTime() {
+    using namespace chrono;
     auto now = system_clock::now();
     auto time = system_clock::to_time_t(now);
 
-    std::tm tm;
+    tm tm;
     localtime_s(&tm, &time);
 
-    std::wostringstream oss;
-    oss << L"[ " << std::put_time(&tm, L"%H:%M:%S") << L" ] ";
+    wostringstream oss;
+    oss << L"[ " << put_time(&tm, L"%H:%M:%S") << L" ] ";
     return oss.str();
 }
 
-void log(const std::wstring& message) {
-    const std::wstring colorCode = L"\033[1;32m";
-    const std::wstring resetCode = L"\033[0m";
+void log(const wstring& message) {
+    const wstring colorCode = L"\033[1;32m";
+    const wstring resetCode = L"\033[0m";
 
-    std::wcout << colorCode << currentTime() << resetCode << message << std::endl;
+    wcout << colorCode << currentTime() << resetCode << message << endl;
 }
 
-std::wstring extractFileName(const std::wstring& filePath) {
-    size_t lastBackslash = filePath.find_last_of(L'\\');
-    return (lastBackslash != std::wstring::npos) ? filePath.substr(lastBackslash + 1) : filePath;
+wstring extractFileName(const wstring& filePath) {
+    return fs::path(filePath).filename().wstring();
 }
 
-bool containsSignature(const std::vector<char>& data, const std::vector<std::string>& signatures) {
-    std::string content(data.begin(), data.end());
+bool containsSignature(const string& data, const vector<string>& signatures) {
     for (const auto& sig : signatures) {
-        if (content.find(sig) != std::string::npos) {
+        if (data.find(sig) != string::npos) {
             return true;
         }
     }
     return false;
 }
 
-bool isOggFile(const std::vector<char>& data) {
-    static const std::vector<std::string> signatures = { "OggS", "vorbis" };
+bool isOggFile(const string& data) {
+    static const vector<string> signatures = { "OggS", "vorbis" };
     return containsSignature(data, signatures);
 }
 
-bool isMp3File(const std::vector<char>& data) {
-    static const std::vector<std::string> signatures = { "ID3", "LAME", "matroska" };
+bool isMp3File(const string& data) {
+    static const vector<string> signatures = { "ID3", "LAME", "matroska" };
     return containsSignature(data, signatures);
 }
 
-bool copyFileToDir(const std::wstring& filePath, const std::string& audioType) {
-    std::wstring savedAudiosDir = L"saved_audios";
+bool copyFileToDir(const wstring& filePath, const string& audioType) {
+    wstring savedAudiosDir = L"saved_audios";
 
-    if (!CreateDirectory(savedAudiosDir.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) {
-        log(L"Error creating 'saved_audios' directory: " + std::to_wstring(GetLastError()));
-        return false;
+    if (!fs::exists(savedAudiosDir)) {
+        try {
+            fs::create_directory(savedAudiosDir);
+        } catch (const fs::filesystem_error& e) {
+            log(L"Error creating 'saved_audios' directory: " + wstring(e.what()));
+            return false;
+        }
     }
 
-    std::wstring fileName = extractFileName(filePath);
-    std::wstring destinationPath = savedAudiosDir + L"\\" + fileName + L"." + std::wstring(audioType.begin(), audioType.end());
+    wstring fileName = extractFileName(filePath);
+    wstring destinationPath = savedAudiosDir + L"\\" + fileName + L"." + wstring(audioType.begin(), audioType.end());
 
-    if (CopyFile(filePath.c_str(), destinationPath.c_str(), FALSE)) {
+    try {
+        fs::copy(filePath, destinationPath, fs::copy_options::overwrite_existing);
         return true;
-    }
-    else {
-        log(L"Error copying file to 'saved_audios' directory: " + std::to_wstring(GetLastError()));
+    } catch (const fs::filesystem_error& e) {
+        log(L"Error copying file to 'saved_audios' directory: " + wstring(e.what()));
         return false;
     }
 }
 
-bool checkForAudioType(const std::wstring& filePath, const std::wstring& logFilePath, bool isExistingFile) {
-    std::wifstream logFile(logFilePath);
-    std::set<std::wstring> processedFiles;
-    std::wstring line;
-
-    while (std::getline(logFile, line)) {
-        processedFiles.insert(line);
+bool checkForAudioType(const wstring& filePath, const wstring& logFilePath, bool isExistingFile) {
+    static set<wstring> processedFiles;
+    if (processedFiles.empty()) {
+        wifstream logFile(logFilePath);
+        wstring line;
+        while (getline(logFile, line)) {
+            processedFiles.insert(line);
+        }
+        logFile.close();
     }
-    logFile.close();
 
     if (processedFiles.find(filePath) != processedFiles.end()) {
         return false;
     }
 
-    std::ifstream file(filePath, std::ios::binary);
+    ifstream file(filePath, ios::binary | ios::ate);
     if (!file.is_open()) {
-        log(L"Error opening file " + filePath + L": " + std::to_wstring(GetLastError()));
+        log(L"Error opening file " + filePath + L": " + to_wstring(GetLastError()));
         return false;
     }
 
-    std::vector<char> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    streamsize size = file.tellg();
+    file.seekg(0, ios::beg);
+    string data(size, '\0');
+    if (!file.read(&data[0], size)) {
+        log(L"Error reading file " + filePath + L": " + to_wstring(GetLastError()));
+        return false;
+    }
     file.close();
 
     bool copied = false;
 
     if (isOggFile(data)) {
         copied = copyFileToDir(filePath, "ogg");
-    }
-    else if (isMp3File(data)) {
+    } else if (isMp3File(data)) {
         copied = copyFileToDir(filePath, "mp3");
     }
 
     if (copied) {
-        std::wofstream logFile(logFilePath, std::ios::app);
-        logFile << filePath << std::endl;
+        processedFiles.insert(filePath);
+        wofstream logFile(logFilePath, ios::app);
+        logFile << filePath << endl;
         logFile.close();
 
-        if (isExistingFile) {
-            log(L"File copied to 'saved_audios' directory: " + extractFileName(filePath) + L"." + (isOggFile(data) ? L"ogg" : L"mp3"));
-        }
-        else {
-            log(L"New audio discovered, copied to: " + extractFileName(filePath) + L"." + (isOggFile(data) ? L"ogg" : L"mp3"));
-        }
+        log(L"File copied to 'saved_audios' directory: " + extractFileName(filePath) + L"." + (isOggFile(data) ? L"ogg" : L"mp3"));
     }
 
     return copied;
 }
 
-void copyExistingFiles(const std::wstring& path, const std::wstring& logFilePath) {
-    using namespace std::chrono;
+void copyExistingFiles(const wstring& path, const wstring& logFilePath) {
+    using namespace chrono;
 
     auto start = high_resolution_clock::now();
 
@@ -149,17 +167,17 @@ void copyExistingFiles(const std::wstring& path, const std::wstring& logFilePath
 
     auto end = high_resolution_clock::now();
     duration<double> elapsed = end - start;
-    std::wostringstream oss;
-    oss << std::fixed << std::setprecision(2);
+    wostringstream oss;
+    oss << fixed << setprecision(2);
     oss << L"Finished scanning existing files, took " << elapsed.count() << L" seconds";
     log(oss.str());
 }
 
-void watchDir(const std::wstring& path, const std::wstring& logFilePath) {
+void watchDir(const wstring& path, const wstring& logFilePath) {
     HANDLE hDir = CreateFile(path.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
 
     if (hDir == INVALID_HANDLE_VALUE) {
-        log(L"Error opening directory: " + std::to_wstring(GetLastError()));
+        log(L"Error opening directory: " + to_wstring(GetLastError()));
         return;
     }
 
@@ -174,7 +192,7 @@ void watchDir(const std::wstring& path, const std::wstring& logFilePath) {
             wcsncpy_s(fileName, pInfo->FileName, pInfo->FileNameLength / sizeof(wchar_t));
 
             if (wcsncmp(fileName, L"RBX", 3) != 0) {
-                std::wstring filePath = path + L"\\" + fileName;
+                wstring filePath = path + L"\\" + fileName;
 
                 WIN32_FILE_ATTRIBUTE_DATA fileAttr;
                 if (GetFileAttributesEx(filePath.c_str(), GetFileExInfoStandard, &fileAttr)) {
@@ -199,13 +217,13 @@ int main() {
 
     wchar_t tempDir[MAX_PATH];
     if (GetTempPath(MAX_PATH, tempDir) == 0) {
-        log(L"Error getting temporary directory: " + std::to_wstring(GetLastError()));
+        log(L"Error getting temporary directory: " + to_wstring(GetLastError()));
         return 1;
     }
 
-    std::wstring directoryPath = tempDir;
+    wstring directoryPath = tempDir;
     directoryPath += L"Roblox\\http";
-    std::wstring logFilePath = L"processed_files.log";
+    wstring logFilePath = L"processed_files.log";
 
     copyExistingFiles(directoryPath, logFilePath);
     watchDir(directoryPath, logFilePath);
