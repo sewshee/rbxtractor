@@ -58,12 +58,12 @@ bool containsSignature(const std::vector<char>& data, const std::vector<std::str
 }
 
 bool isOggFile(const std::vector<char>& data) {
-    std::vector<std::string> signatures = { "OggS", "vorbis" };
+    static const std::vector<std::string> signatures = { "OggS", "vorbis" };
     return containsSignature(data, signatures);
 }
 
 bool isMp3File(const std::vector<char>& data) {
-    std::vector<std::string> signatures = { "ID3", "LAME", "matroska" };
+    static const std::vector<std::string> signatures = { "ID3", "LAME", "matroska" };
     return containsSignature(data, signatures);
 }
 
@@ -136,13 +136,23 @@ bool checkForAudioType(const std::wstring& filePath, const std::wstring& logFile
 }
 
 void copyExistingFiles(const std::wstring& path, const std::wstring& logFilePath) {
+    using namespace std::chrono;
+
+    auto start = high_resolution_clock::now();
+
     log(L"Scanning existing files...");
     for (const auto& entry : fs::directory_iterator(path)) {
         if (entry.is_regular_file()) {
             checkForAudioType(entry.path().wstring(), logFilePath, true);
         }
     }
-    log(L"Finished scanning existing files");
+
+    auto end = high_resolution_clock::now();
+    duration<double> elapsed = end - start;
+    std::wostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    oss << L"Finished scanning existing files, took " << elapsed.count() << L" seconds";
+    log(oss.str());
 }
 
 void watchDir(const std::wstring& path, const std::wstring& logFilePath) {
