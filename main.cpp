@@ -12,7 +12,6 @@
 namespace fs = std::filesystem;
 using namespace std;
 
-// Function declarations
 void enableAnsi();
 wstring currentTime();
 void log(const wstring& message);
