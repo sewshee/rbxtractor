@@ -312,7 +312,7 @@ void watchDir(const std::wstring& path, const std::wstring& logFilePath, std::se
 int main() {
     enableAnsi();
 
-    log(L"rbxtractor written by sewshee and contributors https://sewshee.derg.lol/discord https://github.com/sewshee\n");
+    log(L"rbxtractor v1.2.0 written by sewshee and contributors https://sewshee.derg.lol/discord https://github.com/sewshee\n");
 
     wchar_t tempDir[MAX_PATH];
     if (GetTempPath(MAX_PATH, tempDir) == 0) {
